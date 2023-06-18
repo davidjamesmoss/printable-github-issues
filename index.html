@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>Printable GitHub Issues</title>
+        <script src="https://unpkg.com/vue@3.3.4"></script>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-KK94CHFLLe+nY2dmCWGMq91rCGa5gtU4mk92HdvYe+M/SXH301p5ILy+dN9+nJOZ" crossorigin="anonymous">
+        <style>
+            .header {
+                width: 210mm;
+            }
+            .issue {
+                /* ISO A4 dimensions */
+                width: 210mm;
+                height: 290mm; /* Slightly shorter page to avoid blank pages when printing */
+                padding: 10mm;
+                overflow: hidden;
+            }
+            .markdown img {
+                max-width: 50%;
+                display: block;
+            }
+            .markdown blockquote {
+                border-left: 3px solid #999;
+                padding-left: 0.5rem;
+            }
+            @media print {
+                .issue:not(:last-child)  {
+                    page-break-after: always;
+                }
+            }
+            @media screen {
+                body {
+                    background-color: #eee;
+                }
+                .issue {
+                    margin: 0 auto 40px auto;
+                    box-shadow: 0 0 50px -25px rgba(0, 0, 0, 0.5);
+                    background-color: white;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="d-print-none bg-dark text-white">
+            <div class="container header px-4 py-3 ">
+                <h1 class="ps-1">Printable GitHub Issues</h1>
+                <h3 id="loading" class="ps-1 mb-4">Loading&hellip;</h3>
+            </div>
+        </div>
+        <div id="app" class="d-none">
+            <div class="d-print-none bg-dark text-white mb-5">
+                <div class="container header px-4 py-3 mb-3 ">
+                    <table v-if="repos.length" class="table table-dark">
+                        <thead>
+                            <tr>
+                                <th>Repository</th>
+                                <th class="text-end">Issue count</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="repo in repos" :key="repo.id">
+                                <td>{{ repo.full_name }}</td>
+                                <td class="text-end">{{ repo.count }}</td>
+                            </tr>
+                            <tr>
+                                <th>Total</th>
+                                <th class="text-end">{{ issues.length }}</th>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div v-if="!githubPATFound" class="container mb-5" id="getPAT">
+                <form class="bg-white p-3 border" id="getPATform" @submit.prevent="storePAT">
+                    <h5 class="mb-0">Authentication</h5>
+                    <p>Create a Personal Access Token in GitHub with read-only access to issues.</p>
+                    <div class="mb-3">
+                        <label for="githubOrgInput" class="form-label">GitHub Organisation</label>
+                        <input type="text" class="form-control" id="githubOrgInput" v-model="githubOrg">
+                    </div>
+                    <div class="mb-3">
+                        <label for="githubPATinput" class="form-label">GitHub Personal Access Token</label>
+                        <input type="password" class="form-control" id="githubPATinput" v-model="githubPAT">
+                    </div>
+                    <button type="submit" class="btn btn-success">Continue</button>
+                </form>
+            </div>
+
+            <div v-for="issue in issues" :key="issue.id" class="issue">
+                <div class="d-flex mb-3 border-bottom">
+                    <div class="flex-grow-1">
+                        <h4 class="mb-3">
+                            <a :href="issue.html_url" class="text-decoration-none text-dark fw-bolder small" target="_blank">
+                                {{ issue.repo }} #{{ issue.number }}
+                            </a>
+                        </h4>
+
+                        <h3>{{ issue.title }}</h3>
+
+                        <ul class="list-inline">
+                            <li class="list-inline-item" v-for="label in issue.labels" :key="label.id">
+                                <span class="badge py-1 px-2" :style="{backgroundColor: '#' + label.color}">{{ label.name }}</span>
+                            </li>
+                        </ul>
+                    </div>
+                    <div>
+                        <span class="badge rounded-pill float-end fs-5 text-capitalize" :class="{'bg-success': issue.state === 'open', 'bg-danger': issue.state === 'closed'}">
+                            {{ issue.state }}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="d-flex mb-3 border-bottom">
+                    <div class="flex-grow-1">
+                        <ul class="list-inline small mb-2">
+                            <li class="list-inline-item me-3">
+                                <div class="d-flex align-items-center">
+                                    <img :src="issue.user.avatar_url" class="rounded-circle me-2" width="36" height="36">
+                                    <div>
+                                        <h6 class="small mb-0">Created by</h6>
+                                        <b>{{ issue.user.login }}</b>
+                                    </div>
+                                </div>
+                            </li>
+                            <li class="list-inline-item me-3" v-for="assignee in issue.assignees" :key="assignee.id">
+                                <div class="d-flex align-items-center">
+                                    <img :src="assignee.avatar_url" class="rounded-circle me-2" width="36" height="36">
+                                    <div>
+                                        <h6 class="small mb-0">Assigned to</h6>
+                                        <b>{{ assignee.login }}</b>
+                                    </div>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <ul class="list-inline small mb-2">
+                        <li class="list-inline-item me-3">
+                            <h6 class="small mb-0">Created</h6>
+                            <b>{{ issue.created_at.split('T')[0] }}</b>
+                        </li>
+                        <li class="list-inline-item me-3">
+                            <h6 class="small mb-0">Updated</h6>
+                            <b>{{ issue.updated_at.split('T')[0] }}</b>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="markdown small mt-3" v-html="makeHtml(issue.body)"></div>
+
+                <div v-if="issue.comments.length" class="mt-4">
+                    <div v-for="comment in issue.comments" :key="comment.id" class="mb-3">
+                        <div class="d-flex mb-3">
+                            <img :src="comment.user.avatar_url" class="rounded-circle me-2" width="36" height="36">
+                            <div class="flex-grow-1 border-start ps-2">
+                                <h6 class="small">
+                                    <b>{{ comment.user.login }}</b>
+                                    <span>
+                                        commented on {{ comment.created_at.split('T')[0] }}
+                                    </span>
+                                </h6>
+                                <div class="markdown small" v-html="makeHtml(comment.body)"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+    <script type="module">
+        import { Octokit } from "https://esm.sh/octokit@2.0.22";
+        import { restEndpointMethods } from "https://esm.sh/@octokit/plugin-rest-endpoint-methods@7.2.3";
+        import { paginateRest } from "https://esm.sh/@octokit/plugin-paginate-rest@7.1.2";
+
+        const showdown = await import("https://cdn.skypack.dev/showdown@2.1.0");
+        showdown.setOption('simplifiedAutoLink', true);
+        showdown.setOption('openLinksInNewWindow', true);
+        showdown.setOption('ghMentions', true);
+        const converter = new showdown.Converter();
+
+        const app = Vue.createApp({
+            data() {
+                return {
+                    repos: [],
+                    issues: [],
+                    prs: {},
+                    githubPATFound: false,
+                    githubOrg: '',
+                    githubPAT: '',
+                };
+            },
+            methods: {
+                makeHtml(body) {
+                    return converter.makeHtml(body);
+                },
+                async getIssues() {
+                    const MyOctokit = Octokit.plugin(restEndpointMethods).plugin(paginateRest);
+                    const octokit = new MyOctokit({
+                        auth: this.githubPAT
+                    });
+
+                    const headers = {
+                        'X-GitHub-Api-Version': '2022-11-28'
+                    }
+
+                    for await (const response of octokit.paginate.iterator(
+                        octokit.rest.repos.listForOrg,
+                        {
+                            org: this.githubOrg,
+                            type: 'sources',
+                            sort: 'full_name',
+                            direction: 'asc',
+                            per_page: 100,
+                            headers: headers
+                        }
+                    )) {
+                        const repos = response.data;
+                        for (const repo of repos) {
+                            //console.log(repo);
+                            if (repo.open_issues_count) {
+                                repo.count = 0;
+                                this.repos.push(repo);
+
+                                for await (const issues_response of octokit.paginate.iterator(
+                                    octokit.rest.issues.listForRepo,
+                                    {
+                                        owner: repo.owner.login,
+                                        repo: repo.name,
+                                        filter: 'all',
+                                        sort: 'created',
+                                        direction: 'asc',
+                                        per_page: 100,
+                                        headers: headers
+                                    }
+                                )) {
+                                    const issues = issues_response.data;
+                                    for (const issue of issues) {
+                                        if(!issue.pull_request) {
+                                            issue.repo = repo.full_name;
+                                            repo.count++;
+                                            //console.log(issue);
+
+                                            const comments = await octokit.rest.issues.listComments({
+                                                owner: repo.owner.login,
+                                                repo: repo.name,
+                                                issue_number: issue.number,
+                                                headers: headers
+                                            });
+                                            //console.log(comments);
+                                            issue.comments = comments.data;
+                                            this.issues.push(issue);
+                                        } else {
+                                            this.prs[issue.number] = issue;
+                                            // console.log(issue);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                async storePAT() {
+                    localStorage.setItem('githubOrg', this.githubOrg);
+                    localStorage.setItem('githubPAT', this.githubPAT);
+                    console.log('PAT stored');
+                    this.githubPATFound = true;
+                    await this.getIssues();
+                },
+            },
+            mounted() {
+                if (localStorage.getItem('githubPAT')) {
+                    this.githubPATFound = true;
+                    this.githubOrg = localStorage.getItem('githubOrg');
+                    this.githubPAT = localStorage.getItem('githubPAT');
+                    console.log('PAT found');
+                    this.getIssues();
+                } else {
+                    console.log('PAT not found');
+                }
+            },
+        });
+        app.mount('#app');
+        document.getElementById('loading').classList.add('d-none');
+        document.getElementById('app').classList.remove('d-none');
+    </script>
+  </body>
+</html>
